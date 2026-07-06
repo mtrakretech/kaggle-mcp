@@ -1,0 +1,12 @@
+{
+  "mcpServers": {
+    "kaggle": {
+      "command": "python",
+      "args": ["C:\\Users\\pc\\kaggle_mcp.py", "--stdio"],
+      "env": {
+        "KAGGLE_USERNAME": "your_username",
+        "KAGGLE_KEY": "your_api_key"
+      }
+    }
+  }
+}
