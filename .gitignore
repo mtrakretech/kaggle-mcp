@@ -1,23 +1,32 @@
-# Environment / secrets
+# secrets
 .env
+.env.*
+!.env.example
 kaggle.json
+**/kaggle.json
 
-# Python
+# python
 __pycache__/
-*.pyc
-*.pyo
+*.py[cod]
 *.egg-info/
+.eggs/
 dist/
 build/
+.venv/
+venv/
+*.egg
 
-# OS
+# os / ide
 .DS_Store
 Thumbs.db
-
-# IDE
 .vscode/
 .idea/
+*.swp
 
-# Temp
+# runtime / temp
 *.tmp
 temp/
+.tmp/
+downloads/
+outputs/
+*.zip

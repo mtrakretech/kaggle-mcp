@@ -1,0 +1,10 @@
+# ~/.codex/config.toml  (or project .codex/config.toml)
+
+[mcp_servers.kaggle]
+command = "python"
+args = ["/ABSOLUTE/PATH/TO/kaggle-mcp/kaggle_mcp.py", "--stdio"]
+
+[mcp_servers.kaggle.env]
+KAGGLE_USERNAME = "your_kaggle_username"
+KAGGLE_KEY = "your_kaggle_api_key"
+KAGGLE_API_TOKEN = "your_kaggle_api_key"

@@ -1,0 +1,16 @@
+# Add under mcp_servers in Hermes config.yaml
+# Windows: %LOCALAPPDATA%/hermes/config.yaml
+# macOS/Linux: ~/.hermes/config.yaml
+
+mcp_servers:
+  kaggle:
+    command: python
+    args:
+      - /ABSOLUTE/PATH/TO/kaggle-mcp/kaggle_mcp.py
+      - --stdio
+    env:
+      KAGGLE_USERNAME: your_kaggle_username
+      KAGGLE_KEY: your_kaggle_api_key
+      KAGGLE_API_TOKEN: your_kaggle_api_key
+    timeout: 180
+    connect_timeout: 60

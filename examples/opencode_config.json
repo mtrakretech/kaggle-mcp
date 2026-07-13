@@ -1,0 +1,18 @@
+{
+  "mcp": {
+    "kaggle": {
+      "type": "local",
+      "command": [
+        "python",
+        "/ABSOLUTE/PATH/TO/kaggle-mcp/kaggle_mcp.py",
+        "--stdio"
+      ],
+      "enabled": true,
+      "environment": {
+        "KAGGLE_USERNAME": "your_kaggle_username",
+        "KAGGLE_KEY": "your_kaggle_api_key",
+        "KAGGLE_API_TOKEN": "your_kaggle_api_key"
+      }
+    }
+  }
+}

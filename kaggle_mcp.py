@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 ╔═══════════════════════════════════════════════════════════════╗
-║  Kaggle MCP Server v2.0                                     ║
+║  Kaggle MCP Server v2.1                                     ║
 ║  Full Kaggle API via Model Context Protocol                  ║
 ║                                                              ║
 ║  Compatible with: Claude Code, Codex CLI, Cursor,           ║
@@ -15,7 +15,8 @@
 
 Environment variables (recommended over CLI):
   KAGGLE_USERNAME       Your Kaggle username
-  KAGGLE_KEY            Your Kaggle API key (KGAT_... or kaggle.json key)
+  KAGGLE_KEY            Your Kaggle API key (from kaggle.json, or token from settings)
+  KAGGLE_API_TOKEN      Optional; defaults to KAGGLE_KEY (kaggle CLI v2.2.3+)
 """
 
 import json, os, sys, subprocess, tempfile, shutil, uuid, threading, time
@@ -74,7 +75,7 @@ def _kaggle(*args: str, timeout: int = 120) -> dict:
     env = os.environ.copy()
     env["KAGGLE_USERNAME"] = KAGGLE_USER
     env["KAGGLE_KEY"] = KAGGLE_KEY
-    env["KAGGLE_API_TOKEN"] = KAGGLE_KEY  # v2.2.3+ requires this for some commands
+    env["KAGGLE_API_TOKEN"] = os.environ.get("KAGGLE_API_TOKEN") or KAGGLE_KEY  # v2.2.3+
     # Disable progress bars for JSON-friendly output
     env["KAGGLE_NO_PROGRESS"] = "1"
     try:
@@ -855,7 +856,7 @@ def _handle_mcp_request(data: dict) -> dict:
                 },
                 "serverInfo": {
                     "name": "kaggle-mcp",
-                    "version": "2.0.0"
+                    "version": "2.1.0"
                 }
             }
         }
@@ -1048,7 +1049,10 @@ def _run_http(port: int):
             self.wfile.write(json.dumps(data, ensure_ascii=False).encode())
 
         def log_message(self, fmt, *args):
-            log(f"HTTP: {args[0]} {args[1]} {args[2]}")
+            try:
+                log(f"HTTP: {fmt % args}")
+            except Exception:
+                log(f"HTTP: {fmt} {args}")
 
     server = HTTPServer(("127.0.0.1", port), MCPHandler)
     log(f"Kaggle MCP Server running on http://127.0.0.1:{port}")
@@ -1075,27 +1079,34 @@ def print_usage():
     sys.exit(0)
 
 
-if __name__ == "__main__":
-    if "--help" in sys.argv or "-h" in sys.argv:
+def main(argv=None):
+    """Entry point for console script and direct execution."""
+    import sys as _sys
+    if argv is not None:
+        _sys.argv = [_sys.argv[0], *argv]
+
+    if "--help" in _sys.argv or "-h" in _sys.argv:
         print_usage()
 
-    if "--stdio" in sys.argv:
+    if "--stdio" in _sys.argv:
         _run_stdio()
-    elif any(a.startswith("--port") for a in sys.argv):
+    elif any(a.startswith("--port") for a in _sys.argv):
         try:
-            idx = [a for a in sys.argv if a.startswith("--port")][0]
-            port = int(idx.split("=")[-1] if "=" in idx else sys.argv[sys.argv.index(idx) + 1])
+            idx = [a for a in _sys.argv if a.startswith("--port")][0]
+            port = int(idx.split("=")[-1] if "=" in idx else _sys.argv[_sys.argv.index(idx) + 1])
         except (ValueError, IndexError):
             port = 8234
         _run_http(port)
-    elif "--list-tools" in sys.argv:
+    elif "--list-tools" in _sys.argv:
         print(json.dumps(_tool_list(), indent=2))
     else:
-        # Default: try stdio first (most compatible with MCP clients)
-        # If stdin is a TTY, fall back to HTTP mode
-        if sys.stdin.isatty():
-            print("No mode specified. Use --stdio (for Claude Code/Codex) or --port N (for HTTP).", file=sys.stderr)
-            print(f"Starting HTTP mode on default port 8234...", file=sys.stderr)
+        if _sys.stdin.isatty():
+            print("No mode specified. Use --stdio (Claude/Codex/Cursor) or --port N (HTTP).", file=_sys.stderr)
+            print("Starting HTTP mode on default port 8234...", file=_sys.stderr)
             _run_http(8234)
         else:
             _run_stdio()
+
+
+if __name__ == "__main__":
+    main()
