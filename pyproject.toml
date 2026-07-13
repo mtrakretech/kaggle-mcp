@@ -4,8 +4,8 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "kaggle-mcp"
-version = "2.1.0"
-description = "Full Kaggle API as an MCP server (25 tools) for Claude Desktop, Claude Code, Codex, Cursor, Hermes, Windsurf, OpenCode, and more."
+version = "3.0.0"
+description = "Full Kaggle CLI surface as an MCP server (68 tools) for Claude Desktop, Claude Code, Codex, Cursor, Hermes, Windsurf, OpenCode, and more."
 readme = "README.md"
 requires-python = ">=3.10"
 license = { text = "MIT" }
