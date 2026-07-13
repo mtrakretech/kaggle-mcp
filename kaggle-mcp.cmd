@@ -1,5 +1,8 @@
 @echo off
 REM Launch Kaggle MCP Server on Windows
+REM   kaggle-mcp.cmd --setup
+REM   kaggle-mcp.cmd --stdio
+REM   kaggle-mcp.cmd --list-tools
 setlocal
 cd /d "%~dp0"
 if exist "%~dp0.env" (

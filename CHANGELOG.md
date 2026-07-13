@@ -1,5 +1,12 @@
 # Changelog
 
+## 3.0.1 — 2026-07-13
+- `python kaggle_mcp.py --setup` interactive credential wizard
+- Saves `~/.kaggle/kaggle.json` + project `.env`, validates via `kaggle quota`
+- Flags: `--username`, `--key`, `--from-json`, `--no-env`, `--no-validate`
+- No longer hard-exits on import without creds (setup/help work first)
+- Auto-offer setup when TTY and credentials missing
+
 ## 3.0.0 — 2026-07-13
 - Expanded from 25 → **68 tools** covering full installed Kaggle CLI surface
 - Kernels: search filters, files, init, topics, fixed push `-p`, delete `-y`

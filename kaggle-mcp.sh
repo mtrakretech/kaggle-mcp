@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # Launch Kaggle MCP Server
 # Usage:
+#   ./kaggle-mcp.sh --setup
 #   ./kaggle-mcp.sh --stdio
 #   ./kaggle-mcp.sh --port 8234
 #   ./kaggle-mcp.sh --list-tools

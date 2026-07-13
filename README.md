@@ -28,7 +28,31 @@ cd kaggle-mcp
 pip install -r requirements.txt
 ```
 
-Credentials (pick one):
+### Credentials (recommended: terminal setup)
+
+```bash
+python kaggle_mcp.py --setup
+```
+
+What it does:
+1. Tells you where to get a token: https://www.kaggle.com/settings → **API** → **Create New Token**
+2. Asks for **username** + **API key** (key input hidden)
+3. Optionally reuses a downloaded `kaggle.json` (cwd / Downloads / `~/.kaggle`)
+4. Saves:
+   - `~/.kaggle/kaggle.json` (chmod 600 when possible)
+   - project `.env` (`KAGGLE_USERNAME`, `KAGGLE_KEY`, `KAGGLE_API_TOKEN`)
+5. Validates with `kaggle quota`
+
+Non-interactive:
+
+```bash
+python kaggle_mcp.py --setup --username YOUR_USER --key YOUR_KEY
+python kaggle_mcp.py --setup --from-json ~/Downloads/kaggle.json
+python kaggle_mcp.py --setup --no-env          # only ~/.kaggle/kaggle.json
+python kaggle_mcp.py --setup --no-validate    # skip API check
+```
+
+Manual alternatives:
 
 ```bash
 export KAGGLE_USERNAME=your_username
@@ -36,17 +60,16 @@ export KAGGLE_KEY=your_api_key
 export KAGGLE_API_TOKEN=$KAGGLE_KEY
 ```
 
-Or `~/.kaggle/kaggle.json`:
+Or hand-write `~/.kaggle/kaggle.json`:
 
 ```json
 {"username":"your_username","key":"your_api_key"}
 ```
 
-Create token: https://www.kaggle.com/settings → API → Create New Token
-
 ## Quick test
 
 ```bash
+python kaggle_mcp.py --setup          # first time
 python kaggle_mcp.py --list-tools
 python kaggle_mcp.py --stdio
 ```
