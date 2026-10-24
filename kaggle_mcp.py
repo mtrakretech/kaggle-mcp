@@ -1,12 +1,12 @@
 #!/usr/bin/env python3
 """
-Kaggle MCP Server v3.0 — full Kaggle CLI surface via MCP.
+Kaggle MCP Server v3.1 — full Kaggle CLI surface via MCP.
 
 Transports: --stdio | --port N | --list-tools | --setup
 Clients: Claude Desktop/Code, Codex, Cursor, Hermes, Windsurf, OpenCode, VS Code, Continue
 """
 from __future__ import annotations
-import getpass, json, os, re, shutil, stat, subprocess, sys, tempfile, time, urllib.parse, uuid
+import getpass, inspect, json, math, os, re, shutil, stat, subprocess, sys, tempfile, time, urllib.parse, uuid
 from pathlib import Path
 from typing import Any, Optional
 
@@ -247,7 +247,8 @@ def log(msg: str) -> None:
 
 def tool(name: str, desc: str, params: Optional[dict] = None):
     def dec(fn):
-        TOOLS[name] = {"fn": fn, "desc": desc, "params": params or {}}
+        TOOLS[name] = {"fn": fn, "desc": desc, "params": params or {},
+                       "optional": {n for n, p in inspect.signature(fn).parameters.items() if p.default is None}}
         return fn
     return dec
 
@@ -939,6 +940,34 @@ def get_account_info():
 def get_config():
     return _kaggle("config","view")
 
+# ========================= LOCAL EXPERIMENT PROVENANCE =========================
+# Imported separately to keep the ledger usable without Kaggle credentials.
+import kaggle_experiments as experiments
+
+_EXPERIMENT_SCHEMAS = {
+    "plan_experiment": ("Fingerprint a local notebook and persist an experiment plan; never uploads or executes code", {
+        "path": {"type": "string"}, "name": {"type": "string"},
+        "datasets_json": {"type": "string", "default": "[]"},
+        "parameters_json": {"type": "string", "default": "{}"},
+        "seed": {"type": "integer", "default": 42},
+        "accelerator": {"type": "string", "enum": ["cpu", "gpu", "tpu"], "default": "cpu"},
+        "internet": {"type": "boolean", "default": False},
+        "evaluation_protocol": {"type": "string", "default": ""}}),
+    "get_experiment": ("Read an experiment plan and its append-only, user-reported observations", {"experiment_id": {"type": "string"}}),
+    "verify_experiment": ("Check current notebook bytes and code against a saved experiment fingerprint", {
+        "experiment_id": {"type": "string"}, "path": {"type": "string"}}),
+    "record_experiment_result": ("Append user-reported metrics; does not verify or fetch Kaggle results", {
+        "experiment_id": {"type": "string"}, "metrics_json": {"type": "string"},
+        "kernel_ref": {"type": "string", "default": ""}, "notes": {"type": "string", "default": ""}}),
+    "list_experiments": ("Page through local experiment plans", {
+        "limit": {"type": "integer", "default": 20}, "offset": {"type": "integer", "default": 0}}),
+    "compare_experiments": ("Rank latest reported metrics for experiments sharing data and evaluation protocol", {
+        "experiment_ids_json": {"type": "string"}, "metric": {"type": "string"},
+        "mode": {"type": "string", "enum": ["min", "max"], "default": "min"}}),
+}
+for _name, (_description, _schema) in _EXPERIMENT_SCHEMAS.items():
+    tool(_name, _description, _schema)(getattr(experiments, _name))
+
 # ========================= MCP TRANSPORT =========================
 
 def _tool_list() -> list:
@@ -948,51 +977,106 @@ def _tool_list() -> list:
         for pname, pinfo in t["params"].items():
             ptype = pinfo.get("type","string")
             schema_type = "string"
-            if ptype in ("number","integer","int"): schema_type = "number"
+            if ptype == "number": schema_type = "number"
+            elif ptype in ("integer", "int"): schema_type = "integer"
             elif ptype in ("boolean","bool"): schema_type = "boolean"
             prop = {"type": schema_type, "description": pinfo.get("description","")}
             if "enum" in pinfo: prop["enum"] = pinfo["enum"]
             if "default" in pinfo: prop["default"] = pinfo["default"]
-            else: required.append(pname)
+            elif pname not in t.get("optional", set()):
+                required.append(pname)
             props[pname] = prop
         result.append({"name": name, "description": t["desc"],
-                       "inputSchema": {"type":"object","properties":props,"required":required}})
+                       "inputSchema": {"type":"object","properties":props,"required":required,"additionalProperties":False},
+                       "annotations": _tool_annotations(name)})
     return result
 
-def _handle_mcp_request(data: dict):
-    msg_id = data.get("id", 0)
-    method = data.get("method", "")
-    params = data.get("params", {}) or {}
+def _tool_annotations(name):
+    local = name in _EXPERIMENT_SCHEMAS
+    local_writes = {"plan_experiment", "record_experiment_result"}
+    # Conservative: downloads and init operations write to the local filesystem.
+    read_only = name.startswith(("search_", "list_", "show_")) or name in {
+        "kernel_status", "kernel_logs", "kernel_files", "dataset_details", "dataset_status",
+        "model_details", "benchmark_task_status", "get_quota", "get_account_info", "get_config"}
+    if local:
+        read_only = name not in local_writes
+    return {"readOnlyHint": read_only,
+            "destructiveHint": not read_only and name not in local_writes,
+            "openWorldHint": not local}
+
+
+def _validate_tool_args(name, args):
+    if not isinstance(args, dict):
+        raise ValueError("arguments must be an object")
+    schema = next(t["inputSchema"] for t in _tool_list() if t["name"] == name)
+    for key in schema["required"]:
+        if key not in args:
+            raise ValueError(f"Missing required argument: {key}")
+    for key, value in args.items():
+        if key not in schema["properties"]:
+            raise ValueError(f"Unknown argument: {key}")
+        prop = schema["properties"][key]
+        kind = prop["type"]
+        valid = ((kind == "string" and isinstance(value, str)) or
+                 (kind == "boolean" and type(value) is bool) or
+                 (kind == "integer" and type(value) is int) or
+                 (kind == "number" and type(value) in (int, float) and math.isfinite(value)))
+        if not valid or ("enum" in prop and value not in prop["enum"]):
+            raise ValueError(f"Invalid value for {key}: expected {kind}" + (" from enum" if "enum" in prop else ""))
+
+
+def _handle_mcp_request(data):
+    def error(code, message, msg_id=None):
+        return {"jsonrpc": "2.0", "id": msg_id, "error": {"code": code, "message": message}}
+    if not isinstance(data, dict) or data.get("jsonrpc") != "2.0" or not isinstance(data.get("method"), str):
+        return error(-32600, "Invalid Request")
+    msg_id = data.get("id")
+    if "id" in data and (type(msg_id) not in (str, int, float, type(None)) or
+                         (isinstance(msg_id, float) and not math.isfinite(msg_id))):
+        return error(-32600, "Invalid request id")
+    # Notifications must never trigger tool side effects or receive responses.
+    if "id" not in data:
+        return None
+    method = data["method"]
+    params = data.get("params", {})
+    if not isinstance(params, dict):
+        return error(-32602, "params must be an object", msg_id)
     if method == "initialize":
+        requested = params.get("protocolVersion", "2025-03-26")
+        version = requested if requested in ("2024-11-05", "2025-03-26", "2025-06-18", "2025-11-25") else "2025-03-26"
         return {"jsonrpc":"2.0","id":msg_id,"result":{
-            "protocolVersion":"2025-03-26","capabilities":{"tools":{}},
-            "serverInfo":{"name":"kaggle-mcp","version":"3.0.0"}}}
-    if method == "notifications/initialized":
-        log("Client initialized"); return None
+            "protocolVersion": version, "capabilities":{"tools":{}},
+            "serverInfo":{"name":"kaggle-mcp","version":"3.1.0"}}}
     if method == "tools/list":
         return {"jsonrpc":"2.0","id":msg_id,"result":{"tools":_tool_list()}}
     if method == "tools/call":
-        name = params.get("name",""); args = params.get("arguments",{}) or {}
-        if name not in TOOLS:
-            return {"jsonrpc":"2.0","id":msg_id,"error":{"code":-32601,"message":f"Unknown tool: {name}"}}
+        name = params.get("name")
+        args = params.get("arguments", {})
+        if not isinstance(name, str) or name not in TOOLS:
+            return error(-32602, "Unknown tool", msg_id)
         try:
-            log(f"Calling '{name}' args={json.dumps(args)[:200]}")
+            _validate_tool_args(name, args)
+        except ValueError as exc:
+            return error(-32602, str(exc), msg_id)
+        try:
+            log(f"Calling '{name}'")  # Arguments can include private paths and content.
             result = TOOLS[name]["fn"](**args)
-            return {"jsonrpc":"2.0","id":msg_id,"result":{"content":[{"type":"text","text":json.dumps(result, indent=2, ensure_ascii=False)}]}}
-        except TypeError as e:
-            return {"jsonrpc":"2.0","id":msg_id,"error":{"code":-32602,"message":f"Invalid arguments: {e}"}}
-        except Exception as e:
-            log(f"Error in '{name}': {e}")
-            return {"jsonrpc":"2.0","id":msg_id,"error":{"code":-32603,"message":str(e)[:500]}}
+        except (ValueError, TypeError, OSError) as exc:
+            result = {"error": str(exc)[:500]}
+        except Exception:
+            result = {"error": "Tool execution failed; inspect local configuration and try again"}
+        return {"jsonrpc":"2.0","id":msg_id,"result":{
+            "isError": isinstance(result, dict) and "error" in result,
+            "content":[{"type":"text","text":json.dumps(result, indent=2, ensure_ascii=False)}]}}
     if method == "resources/list":
         return {"jsonrpc":"2.0","id":msg_id,"result":{"resources":[]}}
     if method == "ping":
         return {"jsonrpc":"2.0","id":msg_id,"result":{}}
-    return {"jsonrpc":"2.0","id":msg_id,"result":{}}
+    return error(-32601, "Method not found", msg_id)
 
 def _run_stdio():
     log(f"STDIO mode — {len(TOOLS)} tools — user={KAGGLE_USER}")
-    print(json.dumps({"tools_loaded":len(TOOLS),"mode":"stdio","version":"3.0.0"}), file=sys.stderr, flush=True)
+    print(json.dumps({"tools_loaded":len(TOOLS),"mode":"stdio","version":"3.1.0"}), file=sys.stderr, flush=True)
     for line in sys.stdin:
         line = line.strip()
         if not line: continue
@@ -1001,7 +1085,7 @@ def _run_stdio():
             if resp is not None:
                 sys.stdout.write(json.dumps(resp)+"\n"); sys.stdout.flush()
         except json.JSONDecodeError:
-            log(f"Invalid JSON: {line[:100]}")
+            sys.stdout.write(json.dumps({"jsonrpc": "2.0", "id": None, "error": {"code": -32700, "message": "Parse error"}}) + "\n"); sys.stdout.flush()
         except KeyboardInterrupt:
             break
 
@@ -1012,7 +1096,7 @@ def _run_http(port: int):
         def do_GET(self):
             p = urllib.parse.urlparse(self.path)
             if p.path == "/sse": self._sse()
-            elif p.path == "/health": self._json({"status":"ok","tools":len(TOOLS),"version":"3.0.0"})
+            elif p.path == "/health": self._json({"status":"ok","tools":len(TOOLS),"version":"3.1.0"})
             elif p.path == "/tools": self._json({"tools":_tool_list()})
             else: self._json({"error":"not found"}, 404)
         def do_POST(self):
@@ -1127,12 +1211,10 @@ def main(argv=None):
         return
 
     if "--stdio" in args:
-        _require_credentials("run stdio MCP")
         _run_stdio()
         return
 
     if any(a.startswith("--port") for a in args):
-        _require_credentials("run HTTP MCP")
         try:
             idx = [a for a in args if a.startswith("--port")][0]
             port = int(idx.split("=")[-1] if "=" in idx else args[args.index(idx) + 1])

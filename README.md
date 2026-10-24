@@ -1,6 +1,19 @@
 # Kaggle MCP Server
 
-**Full Kaggle CLI as a Model Context Protocol (MCP) server — 68 tools (v3.0).**
+**Independent Kaggle CLI MCP server with 74 tools (v3.1), including a local experiment ledger.**
+
+Track notebook fingerprints, declared dataset versions, parameters, and reported metrics across experiments. Compare runs sharing the same declared evaluation protocol.
+
+Kaggle also offers an [official remote MCP server](https://www.kaggle.com/docs/mcp).
+This community project is independent and is not endorsed by Kaggle or Anthropic.
+Its distinct addition is a local experiment provenance workflow.
+
+See [experiment tools and tutorial](docs/EXPERIMENTS.md) and the [development roadmap](docs/ROADMAP.md).
+
+```bash
+python examples/experiment_demo.py  # offline demo; synthetic metrics, no account needed
+python -m unittest discover -s tests -v
+```
 
 Works with Claude Desktop, Claude Code, OpenAI Codex CLI, Cursor, Hermes Agent, Windsurf, OpenCode, VS Code MCP, Continue.dev, and any stdio MCP client.
 
@@ -18,7 +31,7 @@ Works with Claude Desktop, Claude Code, OpenAI Codex CLI, Cursor, Hermes Agent, 
 
 **Transports**
 - `--stdio` preferred for agents
-- `--port N` HTTP SSE + `/rpc` for custom clients
+- `--port N` legacy local HTTP SSE + `/rpc`; not validated as standard remote MCP. Do not expose it as a hosted service.
 
 ## Install
 
@@ -135,7 +148,12 @@ Use **stdio** (not HTTP SSE) with Hermes.
 ### OpenCode / VS Code / Continue
 See `examples/opencode_config.json`, `examples/vscode_mcp.json`, `examples/continue_config.yaml`.
 
-## Tools (68)
+## Tools (74)
+
+### Experiments (6)
+`plan_experiment` `verify_experiment` `get_experiment` `record_experiment_result` `list_experiments` `compare_experiments`
+
+These local tools work without Kaggle credentials when started with `--stdio`. See [limitations and storage](docs/EXPERIMENTS.md).
 
 ### Kernels (15)
 `search_kernels` `list_my_kernels` `kernel_status` `kernel_logs` `kernel_files` `kernel_output` `pull_notebook` `push_notebook` `init_kernel` `update_kernel` `delete_kernel` `preview_notebook` `toggle_kernel_visibility` `list_kernel_topics` `show_kernel_topic`
@@ -146,13 +164,15 @@ See `examples/opencode_config.json`, `examples/vscode_mcp.json`, `examples/conti
 ### Competitions (13)
 `list_competitions` `list_competition_files` `download_competition_data` `submit_competition` `list_competition_submissions` `competition_leaderboard` `list_team_submissions` `list_competition_episodes` `download_competition_replay` `download_competition_episode_logs` `list_competition_pages` `list_competition_topics` `show_competition_topic`
 
-### Models (17)
+### Models (18)
 `list_models` `model_details` `init_model` `create_model` `update_model` `delete_model` `list_model_instances` `get_model_instance` `init_model_instance` `create_model_instance` `update_model_instance` `delete_model_instance` `list_model_instance_versions` `list_model_version_files` `download_model_version` `create_model_version` `delete_model_version` `list_model_topics`
 
-### Forums / Benchmarks / Account (10)
+### Forums / Benchmarks / Account (9)
 `list_forums` `list_forum_topics` `show_forum_topic` `list_benchmark_tasks` `list_benchmark_models` `benchmark_task_status` `get_quota` `get_account_info` `get_config`
 
-## Live test notes (v3.0)
+## Historical live test notes (v3.0)
+
+The following are prior maintainer reports, not live verification of v3.1. New v3.1 checks run offline; no Kaggle account actions were performed.
 
 Verified working against real API on this machine:
 - kernels search/list/status/logs/files/pull/preview/output
@@ -172,7 +192,9 @@ Destructive tools (`delete_*`, `submit_competition`, `push_notebook`, uploads) a
 ## Security
 - No hardcoded credentials
 - Env vars or `~/.kaggle/kaggle.json` only
-- Key never leaves your machine except to Kaggle
+- The experiment ledger stores no credentials. Connected clients can see tool results; review content before sharing.
+- Use stdio. Legacy HTTP is not intended for network exposure.
+- Notebook outputs, uploaded folders, parameters and notes can contain sensitive data; review them before use.
 
 ## License
 MIT — see [LICENSE](LICENSE)

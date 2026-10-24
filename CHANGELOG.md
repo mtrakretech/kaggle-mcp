@@ -1,3 +1,14 @@
+# 3.1.0 — Experiment provenance
+
+- Added six offline experiment tools: plan, verify, read, record results, list and compare.
+- Added SQLite plan/observation history and notebook/code SHA-256 fingerprints.
+- Guard comparisons by declared dataset references and evaluation protocol.
+- Validate MCP arguments and enums; mark tool execution errors with `isError`.
+- Stop executing notifications, return proper parse/unknown-method errors, and omit raw arguments from logs.
+- Fix optional kernel metadata schemas and preserve integer schema types.
+- Add offline regression tests, a synthetic demo, CI matrix, limitations and roadmap.
+- No claim of live Kaggle validation or verified model performance for this release.
+
 # Changelog
 
 ## 3.0.1 — 2026-07-13
