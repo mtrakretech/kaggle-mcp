@@ -23,3 +23,11 @@ kaggle-mcp/
     ├── continue_config.yaml
     └── vscode_mcp.json
 ```
+
+## Experiment workflow (3.1)
+- `kaggle_experiments.py`: local SQLite provenance and comparisons
+- `tests/test_experiments.py`: offline regression tests
+- `examples/experiment_demo.py`: runnable synthetic demonstration
+- `docs/EXPERIMENTS.md`: usage and limits
+- `docs/ROADMAP.md`: implemented features and future milestones
+- `.github/workflows/tests.yml`: cross-platform test and wheel-build CI

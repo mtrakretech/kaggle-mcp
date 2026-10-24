@@ -30,3 +30,7 @@ temp/
 downloads/
 outputs/
 *.zip
+
+# Local experiment state
+*.sqlite3
+*.sqlite3-*
